@@ -1,0 +1,22 @@
+*.exe
+.vscode
+.code-workspace
+*.code-workspace
+.ai/
+.qm/
+.kilo/
+.commandcode/
+res/*
+
+# Build output
+**/x64/
+**/o/
+*.obj
+*.pch
+*.res
+*.lib
+*.exp
+*.pdb
+*.ilk
+*.idb
+*.dll

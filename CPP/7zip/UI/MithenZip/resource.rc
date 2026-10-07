@@ -1,0 +1,16 @@
+#include "../../MyVersionInfo.rc"
+
+MY_VERSION_INFO_DLL("MithenZip Shell Namespace Extension","MithenZip")
+
+1 ICON "../../../../Installer/MithenZip.ico"
+
+#ifndef UNDER_CE
+1 24 MOVEABLE PURE "MithenZip.dll.manifest"
+#endif
+
+STRINGTABLE
+BEGIN
+  101 "MithenZip Archive"
+END
+
+#include "MithenZipDialogs.rc"

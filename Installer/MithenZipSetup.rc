@@ -1,0 +1,55 @@
+#include <windows.h>
+#include <commctrl.h>
+
+#define IDD_MITHENZIP_SETUP 200
+#define IDC_SETUP_TEXT      1001
+#define IDX_SETUP_ASSOC     1002
+#define IDX_SETUP_RESTART   1003
+#define IDC_SETUP_PROGRESS  1004
+
+1 ICON "MithenZip.ico"
+1 24 "setup.manifest"
+
+101 RCDATA "MithenZip.dll"
+102 RCDATA "7z.dll"
+103 RCDATA "MithenZip.exe"
+
+
+IDD_MITHENZIP_SETUP DIALOGEX 0, 0, 260, 118
+STYLE DS_CENTER | DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "MithenZip Setup"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    LTEXT           "Install MithenZip and let File Explorer browse archives as folders.",IDC_SETUP_TEXT,7,8,246,16
+    CONTROL         "Associate all supported file types",IDX_SETUP_ASSOC,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,30,246,10
+    CONTROL         "Restart file explorer",IDX_SETUP_RESTART,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,44,246,10
+    CONTROL         "",IDC_SETUP_PROGRESS,"msctls_progress32",PBS_SMOOTH | WS_BORDER,7,64,246,12
+    DEFPUSHBUTTON   "Install",IDOK,146,96,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,200,96,50,14
+END
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 1,0,0,0
+ PRODUCTVERSION 1,0,0,0
+ FILEFLAGSMASK 0x3fL
+ FILEFLAGS 0x0L
+ FILEOS 0x40004L
+ FILETYPE 0x1L
+ FILESUBTYPE 0x0L
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904b0"
+    BEGIN
+      VALUE "CompanyName","MithenZip\0"
+      VALUE "FileDescription","MithenZip Setup\0"
+      VALUE "FileVersion","1.0.0.0\0"
+      VALUE "ProductName","MithenZip\0"
+      VALUE "ProductVersion","1.0.0.0\0"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation",0x409,1200
+  END
+END

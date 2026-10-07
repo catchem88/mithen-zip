@@ -1,0 +1,10 @@
+; MithenZip.def
+
+LIBRARY "MithenZip"
+
+EXPORTS
+  DllCanUnloadNow PRIVATE
+  DllGetClassObject PRIVATE
+  DllRegisterServer PRIVATE
+  DllUnregisterServer PRIVATE
+  MithenZip_OpenArchive
