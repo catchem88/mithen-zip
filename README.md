@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="img/mithen-logo.png" alt="MithenZip logo" width="180">
+  <img src="img/mithen-zip.png" alt="MithenZip logo" width="180">
 </p>
 
 <h1 align="center">MithenZip</h1>
 
 <div align="center">
-MithenZip complements (rather than relace) Windows File Explorer's archive capability. Extract and create archives from the folder you are already in, with no separate application window. A Windows focused fork of <a href="https://www.7-zip.org/">Igor Pavlov's 7-Zip</a>.
+MithenZip complements (rather than replace) Windows File Explorer's archive capability. Extract and create archives from the folder you are already in, with no separate application window. A Windows focused fork of <a href="https://www.7-zip.org/">Igor Pavlov's 7-Zip</a>.
 </div>
 
 ## Features
@@ -17,10 +17,6 @@ MithenZip complements (rather than relace) Windows File Explorer's archive capab
 
 ## Notes
 * Set "MithenZip" / "MithenZip.exe" as your default application for 7z, zip, rar, etc. To ensure smooth operation on passworded archives.
-
-
-## Screenshot
-![screenshot](img/mithen-zip.png)
 
 ## Part of MithenApps
 * No telemetry
