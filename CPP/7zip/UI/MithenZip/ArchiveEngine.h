@@ -65,6 +65,16 @@ public:
 
 //Curated archive file extensions that this shell extension associates and handles.
 const wchar_t * const * MithenZip_ArchiveExtensions(size_t &count);
+const wchar_t * const * MithenZip_DroppedExtensions(size_t &count);
+
+//True for image files Windows mounts itself (.iso/.img/.vhd/.vhdx).
+bool MithenZip_IsImageExtension(const std::wstring &extension);
+
+//True when the Windows archive handlers can browse this type.
+bool MithenZip_IsWindowsOpenableExtension(const std::wstring &extension);
+
+//Types claimed on install (supported minus the ones Windows opens itself).
+const wchar_t * const * MithenZip_AssociatedExtensions(size_t &count);
 bool MithenZip_IsArchiveExtension(const std::wstring &extension);
 
 class CMithenZipArchive
@@ -106,6 +116,16 @@ public:
 
 //Curated archive file extensions that this shell extension associates and handles.
 const wchar_t * const * MithenZip_ArchiveExtensions(size_t &count);
+const wchar_t * const * MithenZip_DroppedExtensions(size_t &count);
+
+//True for image files Windows mounts itself (.iso/.img/.vhd/.vhdx).
+bool MithenZip_IsImageExtension(const std::wstring &extension);
+
+//True when the Windows archive handlers can browse this type.
+bool MithenZip_IsWindowsOpenableExtension(const std::wstring &extension);
+
+//Types claimed on install (supported minus the ones Windows opens itself).
+const wchar_t * const * MithenZip_AssociatedExtensions(size_t &count);
 bool MithenZip_IsArchiveExtension(const std::wstring &extension);
 
 class CMithenZipArchivePtr

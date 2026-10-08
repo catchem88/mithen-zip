@@ -822,6 +822,69 @@ const wchar_t * const * MithenZip_ArchiveExtensions(size_t &count)
   return kMithenZipArchiveExtensions;
 }
 
+//Extensions earlier builds claimed but no longer do. The system default is better
+//for them: Windows mounts .iso images itself.
+static const wchar_t * const kMithenZipDroppedExtensions[] = {
+  L".iso"
+};
+
+const wchar_t * const * MithenZip_DroppedExtensions(size_t &count)
+{
+  count = sizeof(kMithenZipDroppedExtensions) / sizeof(kMithenZipDroppedExtensions[0]);
+  return kMithenZipDroppedExtensions;
+}
+
+//Types Windows opens properly by itself (it mounts these), so we do not claim them.
+static const wchar_t * const kMithenZipImageExtensions[] = {
+  L".iso",L".img",L".vhd",L".vhdx"
+};
+
+bool MithenZip_IsImageExtension(const std::wstring &extension)
+{
+  if(extension.empty()) {
+    return false;
+  }
+  for(size_t i = 0; i < sizeof(kMithenZipImageExtensions) / sizeof(kMithenZipImageExtensions[0]); i++) {
+    if(_wcsicmp(extension.c_str(),kMithenZipImageExtensions[i]) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+//Types the Windows archive handlers (CompressedFolder / ArchiveFolder) can browse.
+static const wchar_t * const kMithenZipWindowsOpenable[] = {
+  L".zip",L".7z",L".rar",L".tar",L".gz",L".tgz",L".xz",L".txz",
+  L".bz2",L".tbz2",L".cpio",L".zst",L".cab"
+};
+
+bool MithenZip_IsWindowsOpenableExtension(const std::wstring &extension)
+{
+  if(extension.empty()) {
+    return false;
+  }
+  for(size_t i = 0; i < sizeof(kMithenZipWindowsOpenable) / sizeof(kMithenZipWindowsOpenable[0]); i++) {
+    if(_wcsicmp(extension.c_str(),kMithenZipWindowsOpenable[i]) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+//Types claimed on install: every supported type except the ones Windows opens itself.
+static const wchar_t * const kMithenZipAssociatedExtensions[] = {
+  L".7z",L".rar",L".zip",L".zipx",L".tar",L".gz",L".tgz",L".xz",L".txz",
+  L".bz2",L".tbz",L".tbz2",L".cab",L".wim",L".swm",L".esd",
+  L".lzh",L".lha",L".z",L".taz",L".cpio",L".arj",L".rpm",L".deb",
+  L".lzma",L".lz",L".zst",L".001"
+};
+
+const wchar_t * const * MithenZip_AssociatedExtensions(size_t &count)
+{
+  count = sizeof(kMithenZipAssociatedExtensions) / sizeof(kMithenZipAssociatedExtensions[0]);
+  return kMithenZipAssociatedExtensions;
+}
+
 bool MithenZip_IsArchiveExtension(const std::wstring &extension)
 {
   if(extension.empty()) {

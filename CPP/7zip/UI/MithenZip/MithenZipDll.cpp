@@ -218,6 +218,8 @@ STDAPI DllGetClassObject(REFCLSID rclsid,REFIID riid,LPVOID *ppv)
   return result;
 }
 
+static void RestoreExtension(HKEY root,LPCWSTR extension);
+
 static bool RegisterServerInRoot(HKEY root,bool associate)
 {
   wchar_t modulePath[MAX_PATH];
@@ -343,9 +345,32 @@ static bool RegisterServerInRoot(HKEY root,bool associate)
   const DWORD rootTag = (root == HKEY_LOCAL_MACHINE) ? 1 : 2;
   WriteDword(root,kSoftwareKey,kRootValue,rootTag);
 
+  //Hand back extensions earlier builds claimed but we no longer want.
+  {
+    size_t droppedCount = 0;
+    const wchar_t * const * dropped = MithenZip_DroppedExtensions(droppedCount);
+    for(size_t i = 0; i < droppedCount; i++) {
+      //Without a saved backup, restore the known Windows handler instead of leaving
+      //the type with no handler at all.
+      std::wstring backup;
+      const bool hadBackup = ReadString(root,kBackupSubKey,dropped[i],backup) && !backup.empty();
+      const bool isIso = (wcscmp(dropped[i],L".iso") == 0);
+      if(!hadBackup && isIso) {
+        const std::wstring extKey = std::wstring(kClassesPrefix) + dropped[i];
+        std::wstring current;
+        if(ReadString(root,extKey.c_str(),NULL,current) && current == MITHENZIP_PROGID) {
+          if(WriteString(root,extKey.c_str(),NULL,L"Windows.IsoFile")) {
+            continue;
+          }
+        }
+      }
+      RestoreExtension(root,dropped[i]);
+    }
+  }
+
   //Archive file extensions
   size_t extensionCount = 0;
-  const wchar_t * const * extensions = MithenZip_ArchiveExtensions(extensionCount);
+  const wchar_t * const * extensions = MithenZip_AssociatedExtensions(extensionCount);
   for(size_t i = 0; associate && i < extensionCount; i++) {
     const std::wstring extKey = std::wstring(kClassesPrefix) + extensions[i];
     std::wstring backup;
@@ -487,7 +512,7 @@ static bool RegisterServer()
     if(::CoCreateInstance(CLSID_ApplicationAssociationRegistration,NULL,CLSCTX_INPROC_SERVER,
         IID_IApplicationAssociationRegistration,(void**)&registration) == S_OK && registration) {
       size_t extensionCount = 0;
-      const wchar_t * const * extensions = MithenZip_ArchiveExtensions(extensionCount);
+      const wchar_t * const * extensions = MithenZip_AssociatedExtensions(extensionCount);
       for(size_t i = 0; i < extensionCount; i++) {
         registration->SetAppAsDefault(MITHENZIP_PROGID,extensions[i],AT_FILEEXTENSION);
       }
@@ -547,7 +572,7 @@ static void DeleteClassesKeys(HKEY root)
     ::SHDeleteKeyW(root,key.c_str());
   }
   size_t extensionCount = 0;
-  const wchar_t * const * extensions = MithenZip_ArchiveExtensions(extensionCount);
+  const wchar_t * const * extensions = MithenZip_AssociatedExtensions(extensionCount);
   for(size_t i = 0; i < extensionCount; i++) {
     RestoreExtension(root,extensions[i]);
     const std::wstring openWithKey = std::wstring(kClassesPrefix) + extensions[i] + L"\\OpenWithProgids";
