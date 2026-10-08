@@ -18,6 +18,9 @@ MithenZip complements (rather than replace) Windows File Explorer's archive capa
 ## Notes
 * Set "MithenZip" / "MithenZip.exe" as your default application for 7z, zip, rar, etc. To ensure smooth operation on passworded archives.
 
+## Screenshot
+No dedicated GUI! No screenshots!
+
 ## Part of MithenApps
 * No telemetry
 * No changing language after installation (lighter)
