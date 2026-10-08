@@ -5,7 +5,7 @@
 <h1 align="center">MithenZip</h1>
 
 <div align="center">
-MithenZip complements (rather than replace) Windows File Explorer's archive capability. Extract and create archives from the folder you are already in, with no separate application window. A Windows focused fork of <a href="https://www.7-zip.org/">Igor Pavlov's 7-Zip</a>.
+MithenZip complements (Windows already can natively read alot of the archive formats) rather than replace Windows File Explorer's archive capability. Extract and create archives from the folder you are already in, with no separate application window. A Windows focused fork of <a href="https://www.7-zip.org/">Igor Pavlov's 7-Zip</a>.
 </div>
 
 ## Features
