@@ -27,7 +27,7 @@
 
 static const wchar_t *kAppName   = L"MithenZip";
 static const wchar_t *kVersion   = L"1.0.0";
-static const wchar_t *kPublisher = L"MithenZip";
+static const wchar_t *kPublisher = L"MithenApps";
 static const wchar_t *kArpSubKey =
     L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\MithenZip";
 
