@@ -7,5 +7,7 @@
 #pragma warning(disable : 4464) // relative include path contains '..'
 #endif
 #include "../../../Common/Common.h"
+// 26.04 headers use Z7_lifetimebound from Common0.h; include it explicitly.
+#include "../../../Common/Common0.h"
 
 #endif
