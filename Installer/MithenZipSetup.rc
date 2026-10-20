@@ -16,9 +16,9 @@
 
 
 IDD_MITHENZIP_SETUP DIALOGEX 0, 0, 260, 118
-STYLE DS_CENTER | DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+STYLE DS_CENTER | DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "MithenZip Setup"
-FONT 8, "MS Shell Dlg", 400, 0, 0x1
+FONT 9, "Segoe UI", 400, 0, 0x0
 BEGIN
     LTEXT           "Install MithenZip and let File Explorer browse archives as folders.",IDC_SETUP_TEXT,7,8,246,16
     CONTROL         "Associate all supported file types",IDX_SETUP_ASSOC,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,30,246,10
