@@ -30,6 +30,9 @@ No dedicated GUI! No screenshots!
 * Uninstalls cleanly, no leftovers
 * Prioritizing user-ergonomics
 
+## Support and Sponsor the OG creator!
+[Igor Pavlov](https://www.7-zip.org/)
+
 ## Credits
 * [Igor Pavlov](https://www.7-zip.org/) - author of 7-Zip, which MithenZip is derived from.
 * The 7-Zip contributors whose formats and codecs MithenZip builds on.
