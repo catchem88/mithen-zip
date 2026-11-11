@@ -540,7 +540,7 @@ bool MithenZip_ShowExtractDialog(HWND owner,CMithenZipExtractOptions &options)
 // progress dialog
 
 CMithenZipProgressDialog::CMithenZipProgressDialog():
-    _hwnd(NULL),_ownerThread(0),_total(0),_completed(0),_cancelled(0)
+    _hwnd(NULL),_ownerThread(0),_total(0),_completed(0),_lastPost(0),_cancelled(0)
 {
   ::InitializeCriticalSection(&_cs);
 }
@@ -553,14 +553,16 @@ CMithenZipProgressDialog::~CMithenZipProgressDialog()
 
 void CMithenZipProgressDialog::UpdateBar()
 {
-  if(!_hwnd) {
+  if(!_hwnd || !::IsWindow(_hwnd)) {
     return;
   }
   UInt64 total = 0;
   UInt64 completed = 0;
+  std::wstring text;
   ::EnterCriticalSection(&_cs);
   total = _total;
   completed = _completed;
+  text = _text;
   ::LeaveCriticalSection(&_cs);
   LONG position = 0;
   if(total > 0) {
@@ -568,6 +570,9 @@ void CMithenZipProgressDialog::UpdateBar()
     position = (LONG)((scaled > 1000) ? 1000 : scaled);
   }
   ::SendMessageW(::GetDlgItem(_hwnd,IDC_PROGRESS_BAR),PBM_SETPOS,(WPARAM)position,0);
+  if(!text.empty()) {
+    ::SetDlgItemTextW(_hwnd,IDC_PROGRESS_TEXT,text.c_str());
+  }
 }
 
 bool CMithenZipProgressDialog::Create(HWND owner,const std::wstring &title)
@@ -584,6 +589,9 @@ bool CMithenZipProgressDialog::Create(HWND owner,const std::wstring &title)
   }
   ::SendMessageW(::GetDlgItem(_hwnd,IDC_PROGRESS_BAR),PBM_SETRANGE32,0,1000);
   ::SetWindowTextW(_hwnd,title.c_str());
+  //Refresh on a timer too: some formats report progress rarely, and the bar must
+  //not look frozen while the encoder is busy.
+  ::SetTimer(_hwnd,1,200,NULL);
   if(owner) {
     RECT ownerRect;
     RECT dialogRect;
@@ -603,7 +611,7 @@ bool CMithenZipProgressDialog::Create(HWND owner,const std::wstring &title)
 void CMithenZipProgressDialog::Destroy()
 {
   if(_hwnd) {
-    if(::GetCurrentThreadId() == _ownerThread) {
+    if(::GetCurrentThreadId() == _ownerThread && ::IsWindow(_hwnd)) {
       ::DestroyWindow(_hwnd);
     }
     _hwnd = NULL;
@@ -612,7 +620,7 @@ void CMithenZipProgressDialog::Destroy()
 
 void CMithenZipProgressDialog::PumpMessages()
 {
-  if(!_hwnd || ::GetCurrentThreadId() != _ownerThread) {
+  if(!_hwnd || ::GetCurrentThreadId() != _ownerThread || !::IsWindow(_hwnd)) {
     return;
   }
   MSG message;
@@ -622,6 +630,24 @@ void CMithenZipProgressDialog::PumpMessages()
       ::DispatchMessageW(&message);
     }
   }
+}
+
+void CMithenZipProgressDialog::RunUntilDone(HANDLE doneEvent)
+{
+  if(doneEvent) {
+    for(;;) {
+      const DWORD result = ::MsgWaitForMultipleObjects(1,&doneEvent,FALSE,INFINITE,QS_ALLINPUT);
+      if(result == WAIT_OBJECT_0) {
+        break;
+      }
+      if(result == WAIT_OBJECT_0 + 1) {
+        PumpMessages();
+        continue;
+      }
+      break;
+    }
+  }
+  PumpMessages();
 }
 
 void CMithenZipProgressDialog::ProgressSetTotal(UInt64 total)
@@ -636,8 +662,17 @@ void CMithenZipProgressDialog::ProgressSetTotal(UInt64 total)
 
 void CMithenZipProgressDialog::ProgressSetCompleted(UInt64 completed)
 {
+  bool post = false;
   ::EnterCriticalSection(&_cs);
   _completed = completed;
+  if(_hwnd && ::GetCurrentThreadId() != _ownerThread) {
+    //Encoder threads report very often; throttle the cross-thread notifications.
+    const DWORD now = ::GetTickCount();
+    if((DWORD)(now - _lastPost) >= 50) {
+      _lastPost = now;
+      post = true;
+    }
+  }
   ::LeaveCriticalSection(&_cs);
   if(!_hwnd) {
     return;
@@ -647,15 +682,24 @@ void CMithenZipProgressDialog::ProgressSetCompleted(UInt64 completed)
     UpdateBar();
     PumpMessages();
   }
-  else {
+  else if(post) {
     ::PostMessageW(_hwnd,WM_MITHENZIP_PROGRESS,0,0);
   }
 }
 
 void CMithenZipProgressDialog::ProgressSetText(const std::wstring &text)
 {
-  if(_hwnd && ::GetCurrentThreadId() == _ownerThread) {
-    ::SetDlgItemTextW(_hwnd,IDC_PROGRESS_TEXT,text.c_str());
+  ::EnterCriticalSection(&_cs);
+  _text = text;
+  ::LeaveCriticalSection(&_cs);
+  if(!_hwnd) {
+    return;
+  }
+  if(::GetCurrentThreadId() == _ownerThread) {
+    UpdateBar();
+  }
+  else {
+    ::PostMessageW(_hwnd,WM_MITHENZIP_PROGRESS,0,0);
   }
 }
 
@@ -686,6 +730,11 @@ INT_PTR CALLBACK CMithenZipProgressDialog::DialogProc(HWND hwnd,UINT message,WPA
       return TRUE;
     case WM_MITHENZIP_PROGRESS:
       if(self) {
+        self->UpdateBar();
+      }
+      return TRUE;
+    case WM_TIMER:
+      if(self && wParam == 1) {
         self->UpdateBar();
       }
       return TRUE;
@@ -765,6 +814,90 @@ bool MithenZip_ShowPasswordDialog(HWND owner,std::wstring &password)
   return result == TRUE;
 }
 
+//////////////////////////////////////////////////////////////////////////
+// overwrite prompt
+
+struct COverwriteDialogParams
+{
+  std::wstring *path;
+  CMithenZipOverwriteAnswer answer;
+};
+
+static INT_PTR CALLBACK OverwriteDialogProc(HWND hwnd,UINT message,WPARAM wParam,LPARAM lParam)
+{
+  COverwriteDialogParams *params = (COverwriteDialogParams*)::GetWindowLongPtrW(hwnd,DWLP_USER);
+  switch(message) {
+    case WM_INITDIALOG:
+      params = (COverwriteDialogParams*)lParam;
+      ::SetWindowLongPtrW(hwnd,DWLP_USER,(LONG_PTR)params);
+      SetDialogIcon(hwnd);
+      if(params && params->path) {
+        ::SetDlgItemTextW(hwnd,IDC_OVERWRITE_TEXT,
+            (L"The file already exists:\n\n" + *params->path +
+             L"\n\nDo you want to replace it?").c_str());
+      }
+      //Enter must default to Replace.
+      ::SetFocus(::GetDlgItem(hwnd,IDB_OVERWRITE_REPLACE));
+      return FALSE;
+    case WM_COMMAND:
+      switch(LOWORD(wParam)) {
+        case IDOK:
+        case IDB_OVERWRITE_REPLACE:
+          if(params) {
+            params->answer = kMithenZipOverwriteAnswer_Replace;
+          }
+          ::EndDialog(hwnd,TRUE);
+          return TRUE;
+        case IDB_OVERWRITE_REPLACEALL:
+          if(params) {
+            params->answer = kMithenZipOverwriteAnswer_ReplaceAll;
+          }
+          ::EndDialog(hwnd,TRUE);
+          return TRUE;
+        case IDB_OVERWRITE_KEEPBOTH:
+          if(params) {
+            params->answer = kMithenZipOverwriteAnswer_KeepBoth;
+          }
+          ::EndDialog(hwnd,TRUE);
+          return TRUE;
+        case IDB_OVERWRITE_SKIP:
+          if(params) {
+            params->answer = kMithenZipOverwriteAnswer_Skip;
+          }
+          ::EndDialog(hwnd,TRUE);
+          return TRUE;
+        case IDCANCEL:
+          if(params) {
+            params->answer = kMithenZipOverwriteAnswer_Cancel;
+          }
+          ::EndDialog(hwnd,FALSE);
+          return TRUE;
+      }
+      return FALSE;
+    case WM_CLOSE:
+      if(params) {
+        params->answer = kMithenZipOverwriteAnswer_Cancel;
+      }
+      ::EndDialog(hwnd,FALSE);
+      return TRUE;
+  }
+  return FALSE;
+}
+
+CMithenZipOverwriteAnswer MithenZip_ShowOverwriteDialog(HWND owner,const std::wstring &path)
+{
+  //Headless runs must not block on a prompt; replace like a batch tool.
+  if(IsNoUi()) {
+    return kMithenZipOverwriteAnswer_Replace;
+  }
+  COverwriteDialogParams params;
+  params.path = (std::wstring*)&path;
+  params.answer = kMithenZipOverwriteAnswer_Cancel;
+  ::DialogBoxParamW(g_hInstance,MAKEINTRESOURCEW(IDD_MITHENZIP_OVERWRITE),
+      owner,OverwriteDialogProc,(LPARAM)&params);
+  return params.answer;
+}
+
 
 HWND MithenZip_PromptOwner()
 {
@@ -778,13 +911,220 @@ HWND MithenZip_PromptOwner()
 //Put the MithenZip logo in the dialog's title bar.
 static void SetDialogIcon(HWND hwnd)
 {
-  HICON icon = (HICON)::LoadImageW(::GetModuleHandleW(NULL),MAKEINTRESOURCEW(1),
-      IMAGE_ICON,0,0,LR_DEFAULTSIZE | LR_SHARED);
-  if(!icon) {
-    icon = ::LoadIconW(NULL,IDI_APPLICATION);
+  //The icon lives in MithenZip.dll, not in the host process (explorer.exe).
+  const int largeSize = ::GetSystemMetrics(SM_CXICON);
+  const int smallSize = ::GetSystemMetrics(SM_CXSMICON);
+  HICON largeIcon = (HICON)::LoadImageW(g_hInstance,MAKEINTRESOURCEW(1),
+      IMAGE_ICON,largeSize,largeSize,LR_SHARED);
+  HICON smallIcon = (HICON)::LoadImageW(g_hInstance,MAKEINTRESOURCEW(1),
+      IMAGE_ICON,smallSize,smallSize,LR_SHARED);
+  if(!largeIcon) {
+    largeIcon = ::LoadIconW(NULL,IDI_APPLICATION);
   }
-  if(icon) {
-    ::SendMessageW(hwnd,WM_SETICON,ICON_BIG,(LPARAM)icon);
-    ::SendMessageW(hwnd,WM_SETICON,ICON_SMALL,(LPARAM)icon);
+  if(!smallIcon) {
+    smallIcon = ::LoadIconW(NULL,IDI_APPLICATION);
   }
+  if(largeIcon) {
+    ::SendMessageW(hwnd,WM_SETICON,ICON_BIG,(LPARAM)largeIcon);
+  }
+  if(smallIcon) {
+    ::SendMessageW(hwnd,WM_SETICON,ICON_SMALL,(LPARAM)smallIcon);
+  }
+}
+
+//////////////////////////////////////////////////////////////////////////
+// background operation runner
+
+struct COperationContext
+{
+  HWND Owner;
+  int Kind;
+  std::wstring ArchivePath;
+  std::vector<std::wstring> Inputs;
+  CMithenZipCompressOptions Compress;
+  CMithenZipExtractOptions Extract;
+  CMithenZipProgress *Progress;
+  HANDLE Done;
+  HRESULT Result;
+  HRESULT *ResultPtr;
+
+  COperationContext():
+      Owner(NULL),Kind(kMithenZipOp_Compress),Progress(NULL),Done(NULL),
+      Result(E_FAIL),ResultPtr(NULL)
+    {}
+};
+
+static const wchar_t * OperationTitle(int kind)
+{
+  return (kind == kMithenZipOp_Compress)
+      ? L"Adding to archive - MithenZip"
+      : L"Extracting - MithenZip";
+}
+
+static void ReportOperationResult(HWND owner,HRESULT result)
+{
+  if(result == S_OK || result == E_ABORT) {
+    return;
+  }
+  if(IsNoUi()) {
+    return;
+  }
+  if(!::IsWindow(owner)) {
+    owner = NULL;
+  }
+  if(result == MITHENZIP_E_WRONG_PASSWORD) {
+    ::MessageBoxW(owner,L"The password is incorrect. Extraction stopped.",L"MithenZip",MB_OK | MB_ICONERROR);
+    return;
+  }
+  wchar_t buffer[256];
+  swprintf_s(buffer,256,L"The operation failed (0x%08lX).",(unsigned long)result);
+  ::MessageBoxW(owner,buffer,L"MithenZip",MB_OK | MB_ICONERROR);
+}
+
+static HRESULT RunOperationOnCallingThread(COperationContext &context)
+{
+  CMithenZipProgressDialog progress;
+  progress.Create(context.Owner,OperationTitle(context.Kind));
+  context.Progress = &progress;
+  HRESULT result = E_FAIL;
+  if(context.Kind == kMithenZipOp_Compress) {
+    result = MithenZip_Compress(&progress,context.Inputs,context.ArchivePath,context.Compress);
+  }
+  else {
+    result = MithenZip_Extract(&progress,context.ArchivePath,context.Extract);
+  }
+  progress.Destroy();
+  ReportOperationResult(context.Owner,result);
+  return result;
+}
+
+static DWORD WINAPI OperationWorkerThread(LPVOID param)
+{
+  COperationContext *context = (COperationContext*)param;
+  if(context->Kind == kMithenZipOp_Compress) {
+    context->Result = MithenZip_Compress(context->Progress,context->Inputs,
+        context->ArchivePath,context->Compress);
+  }
+  else {
+    context->Result = MithenZip_Extract(context->Progress,context->ArchivePath,
+        context->Extract);
+  }
+  ::SetEvent(context->Done);
+  return 0;
+}
+
+//Owns the progress window. Runs its own message loop so the progress callbacks
+//(which arrive from the encoder threads) are painted while the archive work runs.
+static DWORD WINAPI OperationDialogThread(LPVOID param)
+{
+  COperationContext *context = (COperationContext*)param;
+  const HWND owner = context->Owner;
+  const HANDLE done = context->Done;
+
+  CMithenZipProgressDialog progress;
+  progress.Create(owner,OperationTitle(context->Kind));
+  context->Progress = &progress;
+
+  const HANDLE worker = ::CreateThread(NULL,0,OperationWorkerThread,context,0,NULL);
+  if(worker) {
+    progress.RunUntilDone(done);
+    ::WaitForSingleObject(worker,INFINITE);
+    ::CloseHandle(worker);
+  }
+  else {
+    context->Result = E_FAIL;
+  }
+
+  const HRESULT result = context->Result;
+  progress.Destroy();
+  if(context->ResultPtr) {
+    *context->ResultPtr = result;
+  }
+  ::SetEvent(done);
+  ::CloseHandle(done);
+  delete context;
+  ReportOperationResult(owner,result);
+  ::InterlockedDecrement(&g_dllRefCount);
+  return 0;
+}
+
+static void FillOperationContext(COperationContext &context,HWND owner,int kind,
+    const std::wstring &archivePath,const std::vector<std::wstring> &inputs,
+    const CMithenZipCompressOptions *compress,const CMithenZipExtractOptions *extract)
+{
+  context.Owner = owner;
+  context.Kind = kind;
+  context.ArchivePath = archivePath;
+  context.Inputs = inputs;
+  if(compress) {
+    context.Compress = *compress;
+  }
+  if(extract) {
+    context.Extract = *extract;
+  }
+}
+
+//Starts the operation and returns the dialog thread handle (NULL on failure).
+static HANDLE StartOperationThread(COperationContext &source,HRESULT *resultPtr)
+{
+  COperationContext *context = new COperationContext(source);
+  context->ResultPtr = resultPtr;
+  context->Done = ::CreateEventW(NULL,TRUE,FALSE,NULL);
+  if(!context->Done) {
+    delete context;
+    return NULL;
+  }
+  //Keep this DLL loaded (DllCanUnloadNow) for as long as the operation runs.
+  ::InterlockedIncrement(&g_dllRefCount);
+  const HANDLE thread = ::CreateThread(NULL,0,OperationDialogThread,context,0,NULL);
+  if(!thread) {
+    ::CloseHandle(context->Done);
+    delete context;
+    ::InterlockedDecrement(&g_dllRefCount);
+    return NULL;
+  }
+  return thread;
+}
+
+bool MithenZip_StartOperation(HWND owner,int kind,const std::wstring &archivePath,
+    const std::vector<std::wstring> &inputs,
+    const CMithenZipCompressOptions *compress,
+    const CMithenZipExtractOptions *extract)
+{
+  COperationContext context;
+  FillOperationContext(context,owner,kind,archivePath,inputs,compress,extract);
+  //Headless runs must stay synchronous so their results are deterministic.
+  if(IsNoUi()) {
+    RunOperationOnCallingThread(context);
+    return true;
+  }
+  const HANDLE thread = StartOperationThread(context,NULL);
+  if(!thread) {
+    ReportOperationResult(owner,E_OUTOFMEMORY);
+    return false;
+  }
+  //The operation is now owned by the dialog thread; let it run independently.
+  ::CloseHandle(thread);
+  return true;
+}
+
+HRESULT MithenZip_RunOperation(HWND owner,int kind,const std::wstring &archivePath,
+    const std::vector<std::wstring> &inputs,
+    const CMithenZipCompressOptions *compress,
+    const CMithenZipExtractOptions *extract)
+{
+  COperationContext context;
+  FillOperationContext(context,owner,kind,archivePath,inputs,compress,extract);
+  //Headless runs must stay synchronous so their results are deterministic.
+  if(IsNoUi()) {
+    return RunOperationOnCallingThread(context);
+  }
+  HRESULT result = E_FAIL;
+  const HANDLE thread = StartOperationThread(context,&result);
+  if(!thread) {
+    return E_OUTOFMEMORY;
+  }
+  ::WaitForSingleObject(thread,INFINITE);
+  ::CloseHandle(thread);
+  return result;
 }

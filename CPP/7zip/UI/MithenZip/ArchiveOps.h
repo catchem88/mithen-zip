@@ -39,6 +39,16 @@ enum CMithenZipOverwriteMode
   kMithenZipOverwrite_RenameExisting
 };
 
+//Answer of the "file already exists" prompt used by kMithenZipOverwrite_Ask.
+enum CMithenZipOverwriteAnswer
+{
+  kMithenZipOverwriteAnswer_Replace = 0,
+  kMithenZipOverwriteAnswer_ReplaceAll,
+  kMithenZipOverwriteAnswer_KeepBoth,
+  kMithenZipOverwriteAnswer_Skip,
+  kMithenZipOverwriteAnswer_Cancel
+};
+
 struct CMithenZipCompressOptions
 {
   std::wstring FormatName;      // "7z","zip","tar","gzip","bzip2","xz","wim"

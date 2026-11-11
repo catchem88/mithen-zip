@@ -184,7 +184,8 @@ extern "C" __declspec(dllexport) HRESULT __cdecl MithenZip_OpenArchive(LPCWSTR a
     }
     else {
       //Encrypted, or no Windows browser for this format: offer our own extraction.
-      result = MithenZip_ExtractFilesInteractive(MithenZip_PromptOwner(),path);
+      //The launcher must stay alive until the extraction has finished.
+      result = MithenZip_ExtractFilesInteractive(MithenZip_PromptOwner(),path,true);
     }
   }
 

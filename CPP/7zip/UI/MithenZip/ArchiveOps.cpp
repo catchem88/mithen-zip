@@ -134,9 +134,10 @@ static std::wstring MakeUniqueName(const std::wstring &path)
     base = name.substr(0,dot);
     ext = name.substr(dot);
   }
+  //Windows' "keep both" naming: "name (1).ext", "name (2).ext", ...
   for(int i = 1; i < 100000; i++) {
-    wchar_t suffix[16];
-    swprintf_s(suffix,16,L"_%d",i);
+    wchar_t suffix[32];
+    swprintf_s(suffix,32,L" (%d)",i);
     const std::wstring candidate = JoinPath(dir,base + suffix + ext);
     if(!FileExists(candidate)) {
       return candidate;
@@ -664,11 +665,20 @@ Z7_COM7F_IMF(CExtractCallback::GetStream(UInt32 index,ISequentialOutStream **out
       }
       else if(_overwriteMode == kMithenZipOverwrite_Ask) {
         const HWND owner = _progress ? _progress->ProgressOwner() : NULL;
-        const int answer = ::MessageBoxW(owner,
-            (L"File already exists:\n" + target + L"\n\nOverwrite?").c_str(),
-            L"MithenZip",MB_YESNO | MB_ICONQUESTION);
-        if(answer != IDYES) {
+        const CMithenZipOverwriteAnswer answer = MithenZip_ShowOverwriteDialog(owner,target);
+        if(answer == kMithenZipOverwriteAnswer_Cancel) {
+          return E_ABORT;
+        }
+        if(answer == kMithenZipOverwriteAnswer_Skip) {
           return S_OK;
+        }
+        if(answer == kMithenZipOverwriteAnswer_KeepBoth) {
+          //Leave the existing file alone and extract this one beside it.
+          return FinishOpen(MakeUniqueName(target),outStream,rel);
+        }
+        if(answer == kMithenZipOverwriteAnswer_ReplaceAll) {
+          //Stop asking and replace every remaining conflict.
+          _overwriteMode = kMithenZipOverwrite_Overwrite;
         }
       }
     }

@@ -84,44 +84,6 @@ static std::wstring MakeDefaultArchivePath(const std::vector<std::wstring> &file
   return MithenZip_ParentDir(files[0]) + base + extension;
 }
 
-static void ReportResult(HWND owner,HRESULT result)
-{
-  if(result == S_OK || result == E_ABORT) {
-    return;
-  }
-  wchar_t suppress[8];
-  if(::GetEnvironmentVariableW(L"MITHENZIP_NO_UI",suppress,8) != 0) {
-    return;
-  }
-  if(result == MITHENZIP_E_WRONG_PASSWORD) {
-    ::MessageBoxW(owner,L"The password is incorrect. Extraction stopped.",L"MithenZip",MB_OK | MB_ICONERROR);
-    return;
-  }
-  wchar_t buffer[256];
-  swprintf_s(buffer,256,L"The operation failed (0x%08lX).",(unsigned long)result);
-  ::MessageBoxW(owner,buffer,L"MithenZip",MB_OK | MB_ICONERROR);
-}
-
-static HRESULT CompressWithProgress(HWND owner,const std::vector<std::wstring> &files,
-    const std::wstring &archivePath,const CMithenZipCompressOptions &options)
-{
-  CMithenZipProgressDialog progress;
-  progress.Create(owner,L"Adding to archive - MithenZip");
-  const HRESULT result = MithenZip_Compress(&progress,files,archivePath,options);
-  progress.Destroy();
-  return result;
-}
-
-static HRESULT ExtractWithProgress(HWND owner,const std::wstring &archivePath,
-    const CMithenZipExtractOptions &options)
-{
-  CMithenZipProgressDialog progress;
-  progress.Create(owner,L"Extracting - MithenZip");
-  const HRESULT result = MithenZip_Extract(&progress,archivePath,options);
-  progress.Destroy();
-  return result;
-}
-
 
 CMithenZipContextMenu::CMithenZipContextMenu():
     _ref(1),_idCmdFirst(0),_hasDirectories(false),_hasArchive(false)
@@ -369,8 +331,7 @@ HRESULT CMithenZipContextMenu::InvokeCommandCommon(int command)
       if(archivePath.empty()) {
         return S_OK;
       }
-      const HRESULT result = CompressWithProgress(owner,_fileNames,archivePath,options);
-      ReportResult(owner,result);
+      MithenZip_StartOperation(owner,kMithenZipOp_Compress,archivePath,_fileNames,&options,NULL);
       return S_OK;
     }
     case kMithenZipCmd_AddToZip:
@@ -380,8 +341,7 @@ HRESULT CMithenZipContextMenu::InvokeCommandCommon(int command)
       CMithenZipCompressOptions options;
       options.FormatName = toZip ? L"zip" : L"7z";
       const std::wstring archivePath = MakeDefaultArchivePath(_fileNames,toZip ? L".zip" : L".7z");
-      const HRESULT result = CompressWithProgress(owner,_fileNames,archivePath,options);
-      ReportResult(owner,result);
+      MithenZip_StartOperation(owner,kMithenZipOp_Compress,archivePath,_fileNames,&options,NULL);
       return S_OK;
     }
     case kMithenZipCmd_Open:
@@ -394,7 +354,7 @@ HRESULT CMithenZipContextMenu::InvokeCommandCommon(int command)
       return S_OK;
     }
     case kMithenZipCmd_ExtractFiles:
-      MithenZip_ExtractFilesInteractive(owner,_fileNames[0]);
+      MithenZip_ExtractFilesInteractive(owner,_fileNames[0],false);
       return S_OK;
     case kMithenZipCmd_ExtractHere:
     {
@@ -403,8 +363,8 @@ HRESULT CMithenZipContextMenu::InvokeCommandCommon(int command)
       if(options.OutputDir.empty()) {
         return S_OK;
       }
-      const HRESULT result = ExtractWithProgress(owner,_fileNames[0],options);
-      ReportResult(owner,result);
+      MithenZip_StartOperation(owner,kMithenZipOp_Extract,_fileNames[0],
+          std::vector<std::wstring>(),NULL,&options);
       return S_OK;
     }
     default:
@@ -416,7 +376,7 @@ HRESULT CMithenZipContextMenu::InvokeCommandCommon(int command)
 
 //Shared with MithenZip.exe's open handler: show the Extract files dialog for a
 //single archive and run the extraction.
-HRESULT MithenZip_ExtractFilesInteractive(HWND owner,const std::wstring &archivePath)
+HRESULT MithenZip_ExtractFilesInteractive(HWND owner,const std::wstring &archivePath,bool wait)
 {
   if(archivePath.empty()) {
     return E_INVALIDARG;
@@ -430,9 +390,12 @@ HRESULT MithenZip_ExtractFilesInteractive(HWND owner,const std::wstring &archive
   if(options.OutputDir.empty()) {
     return E_ABORT;
   }
-  const HRESULT result = ExtractWithProgress(owner,archivePath,options);
-  ReportResult(owner,result);
-  return result;
+  const std::vector<std::wstring> noInputs;
+  if(wait) {
+    return MithenZip_RunOperation(owner,kMithenZipOp_Extract,archivePath,noInputs,NULL,&options);
+  }
+  MithenZip_StartOperation(owner,kMithenZipOp_Extract,archivePath,noInputs,NULL,&options);
+  return S_OK;
 }
 
 STDMETHODIMP CMithenZipContextMenu::GetCommandString(UINT_PTR idCmd,UINT uType,
